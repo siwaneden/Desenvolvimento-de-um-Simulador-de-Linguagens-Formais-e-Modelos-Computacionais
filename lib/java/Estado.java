@@ -4,18 +4,18 @@ public class Estado {
 
     private String nome;
     private boolean inicial;
-    private boolean finalEstado;
+    private boolean isEstadoFinal;
 
     public Estado(String nome) {
         this.nome = nome;
         this.inicial = false;
-        this.finalEstado = false;
+        this.isEstadoFinal = false;
     }
 
-    public Estado(String nome, boolean inicial, boolean finalEstado) {
+    public Estado(String nome, boolean inicial, boolean isEstadoFinal) {
         this.nome = nome;
         this.inicial = inicial;
-        this.finalEstado = finalEstado;
+        this.isEstadoFinal = isEstadoFinal;
     }
 
     public String getNome() {
@@ -35,11 +35,11 @@ public class Estado {
     }
 
     public boolean isFinal() {
-        return finalEstado;
+        return isEstadoFinal;
     }
 
-    public void setFinal(boolean finalEstado) {
-        this.finalEstado = finalEstado;
+    public void setFinal(boolean isEstadoFinal) {
+        this.isEstadoFinal = isEstadoFinal;
     }
 
     @Override
