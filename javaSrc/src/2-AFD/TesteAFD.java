@@ -1,6 +1,6 @@
-import afd.AFD;
-import modelo.Estado;
-import modelo.Transicao;
+import automatos.afd.AFD;
+import automatos.Estado;
+import automatos.Transicao;
 
 public class TesteAFD {
 

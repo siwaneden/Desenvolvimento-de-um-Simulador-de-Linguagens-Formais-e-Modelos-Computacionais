@@ -1,6 +1,6 @@
-import afn.AFN;
-import modelo.Estado;
-import modelo.Transicao;
+import automatos.afn.AFN;
+import automatos.Estado;
+import automatos.Transicao;
 
 public class TesteAFN {
 

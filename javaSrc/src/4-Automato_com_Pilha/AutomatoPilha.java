@@ -1,7 +1,7 @@
-package ap;
+package automatos.ap;
 
-import modelo.Automato;
-import modelo.Estado;
+import automatos.Automato;
+import automatos.Estado;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;

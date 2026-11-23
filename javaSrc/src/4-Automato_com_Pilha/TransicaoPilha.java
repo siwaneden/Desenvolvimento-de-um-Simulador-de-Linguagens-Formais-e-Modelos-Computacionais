@@ -1,6 +1,6 @@
-package ap;
+package automatos.ap;
 
-import modelo.Estado;
+import automatos.Estado;
 
 public class TransicaoPilha {
 

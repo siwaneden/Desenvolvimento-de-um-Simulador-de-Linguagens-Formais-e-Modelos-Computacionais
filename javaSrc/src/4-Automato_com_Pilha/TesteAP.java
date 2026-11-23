@@ -1,6 +1,6 @@
-import ap.AutomatoPilha;
-import ap.TransicaoPilha;
-import modelo.Estado;
+import automatos.ap.AutomatoPilha;
+import automatos.ap.TransicaoPilha;
+import automatos.Estado;
 
 public class TesteAP {
 

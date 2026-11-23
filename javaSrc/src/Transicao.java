@@ -1,4 +1,4 @@
-package modelo;
+package automatos;
 
 public class Transicao {
 

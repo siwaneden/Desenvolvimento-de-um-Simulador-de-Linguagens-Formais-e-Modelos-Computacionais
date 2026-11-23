@@ -1,8 +1,8 @@
-package afn;
+package automatos.afn;
 
-import modelo.Automato;
-import modelo.Estado;
-import modelo.Transicao;
+import automatos.Automato;
+import automatos.Estado;
+import automatos.Transicao;
 
 import java.util.ArrayList;
 import java.util.HashSet;
