@@ -139,7 +139,7 @@ async function simulate() {
     if (!response.ok) throw new Error(data.erro || 'Não foi possível simular o autômato.')
     result.value = data
   } catch (error) {
-    apiError.value = `${error.message}`// Verifique se o servidor Java está em execução na porta 8080.`
+    apiError.value = error.message
   } finally { busy.value = false }
 }
 function loadExample() {
