@@ -1,6 +1,6 @@
 @echo off
 echo ===== RUN =====
 
-java -cp "out;lib/*" automatos.Main
+java -cp "out;lib/*" Main
 
 pause
