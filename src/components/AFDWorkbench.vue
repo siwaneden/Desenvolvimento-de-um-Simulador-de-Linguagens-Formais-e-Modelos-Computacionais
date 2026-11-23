@@ -56,22 +56,51 @@ function addTransition() {
   result.value = null
 }
 function pointFor(id) { return states.value.find((state) => state.id === id) }
-function edgePath(item) {
+function edgeGeometry(item) {
   const from = pointFor(item.from)
   const to = pointFor(item.to)
-  if (!from || !to) return ''
-  if (from.id === to.id) return `M ${from.x - 17} ${from.y - 27} C ${from.x - 70} ${from.y - 100}, ${from.x + 70} ${from.y - 100}, ${from.x + 17} ${from.y - 27}`
-  const dx = to.x - from.x, dy = to.y - from.y
+  if (!from || !to) return { path: '', label: { x: 0, y: 0 } }
+
+  if (from.id === to.id) {
+    const siblings = transitions.value.filter((edge) => edge.from === item.from && edge.to === item.to)
+    const index = siblings.indexOf(item)
+    const lift = 82 + index * 28
+    return {
+      path: `M ${from.x - 17} ${from.y - 27} C ${from.x - 70 - index * 12} ${from.y - lift}, ${from.x + 70 + index * 12} ${from.y - lift}, ${from.x + 17} ${from.y - 27}`,
+      label: { x: from.x, y: from.y - lift - 5 },
+    }
+  }
+
+  const dx = to.x - from.x
+  const dy = to.y - from.y
   const length = Math.hypot(dx, dy) || 1
-  const ux = dx / length, uy = dy / length
-  return `M ${from.x + ux * 29} ${from.y + uy * 29} L ${to.x - ux * 31} ${to.y - uy * 31}`
+  const ux = dx / length
+  const uy = dy / length
+  const nx = -uy
+  const ny = ux
+  const siblings = transitions.value.filter((edge) =>
+    (edge.from === item.from && edge.to === item.to) ||
+    (edge.from === item.to && edge.to === item.from),
+  )
+  const index = siblings.indexOf(item)
+  const offset = (index - (siblings.length - 1) / 2) * 42
+  const startX = from.x + ux * 29
+  const startY = from.y + uy * 29
+  const endX = to.x - ux * 31
+  const endY = to.y - uy * 31
+  const controlX = (startX + endX) / 2 + nx * offset
+  const controlY = (startY + endY) / 2 + ny * offset
+
+  return {
+    path: `M ${startX} ${startY} Q ${controlX} ${controlY} ${endX} ${endY}`,
+    label: {
+      x: 0.25 * startX + 0.5 * controlX + 0.25 * endX,
+      y: 0.25 * startY + 0.5 * controlY + 0.25 * endY - 10,
+    },
+  }
 }
-function edgeLabel(item) {
-  const from = pointFor(item.from), to = pointFor(item.to)
-  if (!from || !to) return { x: 0, y: 0 }
-  if (from.id === to.id) return { x: from.x, y: from.y - 83 }
-  return { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 - 12 }
-}
+function edgePath(item) { return edgeGeometry(item).path }
+function edgeLabel(item) { return edgeGeometry(item).label }
 function canvasPoint(event) {
   const svg = event.currentTarget.ownerSVGElement || event.currentTarget
   const rect = svg.getBoundingClientRect()
@@ -107,7 +136,7 @@ async function simulate() {
     if (!response.ok) throw new Error(data.erro || 'Não foi possível simular o autômato.')
     result.value = data
   } catch (error) {
-    apiError.value = `${error.message} Verifique se o servidor Java está em execução na porta 8080.`
+    apiError.value = `${error.message}`// Verifique se o servidor Java está em execução na porta 8080.`
   } finally { busy.value = false }
 }
 function loadExample() {
