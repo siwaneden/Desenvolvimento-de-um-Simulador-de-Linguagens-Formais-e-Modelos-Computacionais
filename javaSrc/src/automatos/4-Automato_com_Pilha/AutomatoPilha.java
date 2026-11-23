@@ -14,10 +14,12 @@ public class AutomatoPilha extends Automato {
 
     private List<TransicaoPilha> transicoesPilha;
     private String simboloInicialPilha;
+    private List<String> historico;
 
     public AutomatoPilha() {
         super();
         transicoesPilha = new ArrayList<>();
+        historico = new ArrayList<>();
     }
 
     // Define o simbolo inicial da pilha
@@ -58,30 +60,41 @@ public class AutomatoPilha extends Automato {
         return true;
     }
 
+    // Retorna os passos da última simulação, sem expor a lista interna.
+    public List<String> getHistorico() {
+        return new ArrayList<>(historico);
+    }
+
+    private String descreverPilha(Deque<String> pilha) {
+        return pilha.isEmpty() ? "ε" : String.join("", pilha);
+    }
+
     // Processa a palavra
     @Override
     public boolean processar(String palavra) {
+        historico.clear();
 
         Estado atual = getEstadoInicial();
 
         if (atual == null) {
-            System.out.println("Estado inicial nao definido!");
+            historico.add("Simulação inválida: estado inicial não definido.");
             return false;
         }
 
         if (getEstadosFinais().isEmpty()) {
-            System.out.println("Nenhum estado final definido!");
+            historico.add("Simulação inválida: nenhum estado final definido.");
             return false;
         }
 
         if (simboloInicialPilha == null
                 || simboloInicialPilha.isEmpty()) {
 
-            System.out.println("Simbolo inicial da pilha nao definido!");
+            historico.add("Simulação inválida: símbolo inicial da pilha não definido.");
             return false;
         }
 
         if (!validarPalavra(palavra)) {
+            historico.add("Palavra rejeitada: contém símbolo fora do alfabeto.");
             return false;
         }
 
@@ -90,6 +103,9 @@ public class AutomatoPilha extends Automato {
 
         // Insere o simbolo inicial
         pilha.push(simboloInicialPilha);
+        historico.add("Inicialização: estado " + atual.getNome()
+                + ", entrada " + (palavra.isEmpty() ? "ε" : palavra)
+                + ", pilha " + descreverPilha(pilha) + ".");
 
         int posicao = 0;
         int limite = 10000;
@@ -104,10 +120,13 @@ public class AutomatoPilha extends Automato {
             if (posicao == palavra.length()
                     && atual.isFinal()) {
 
+                historico.add("Aceita: entrada consumida no estado final "
+                        + atual.getNome() + ", pilha " + descreverPilha(pilha) + ".");
                 return true;
             }
 
             if (pilha.isEmpty()) {
+                historico.add("Rejeita: a pilha ficou vazia antes da aceitação.");
                 return false;
             }
 
@@ -147,18 +166,24 @@ public class AutomatoPilha extends Automato {
 
             // Nenhuma transicao encontrada
             if (aplicaveis.isEmpty()) {
+                historico.add("Rejeita: nenhuma transição aplicável em "
+                        + atual.getNome() + " com topo " + topo
+                        + " e próxima entrada " + simboloAtual + ".");
                 return false;
             }
 
             // Impede escolhas ambiguas nesta implementacao
             if (aplicaveis.size() > 1) {
-                System.out.println(
-                    "Erro: AP deterministico possui transicoes ambiguas!"
-                );
+                historico.add("Rejeita: há mais de uma transição aplicável; "
+                        + "o simulador implementa AP determinístico.");
                 return false;
             }
 
             TransicaoPilha transicao = aplicaveis.get(0);
+
+            String entradaConsumida = transicao.getSimboloEntrada();
+            String estadoOrigem = atual.getNome();
+            String pilhaAntes = descreverPilha(pilha);
 
             // Remove o topo da pilha
             pilha.pop();
@@ -184,9 +209,15 @@ public class AutomatoPilha extends Automato {
             if (!transicao.getSimboloEntrada().equals(EPSILON)) {
                 posicao++;
             }
+
+            historico.add("Passo " + passos + ": " + estadoOrigem
+                    + " --(" + entradaConsumida + ", " + topo + "/"
+                    + substituir + ")--> " + atual.getNome()
+                    + "; pilha " + pilhaAntes + " → " + descreverPilha(pilha)
+                    + "; restante " + (posicao >= palavra.length() ? "ε" : palavra.substring(posicao)) + ".");
         }
 
-        System.out.println("Limite de processamento atingido!");
+        historico.add("Rejeita: limite de 10.000 passos atingido.");
         return false;
     }
 

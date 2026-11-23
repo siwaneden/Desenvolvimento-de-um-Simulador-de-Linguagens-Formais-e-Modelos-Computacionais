@@ -4,6 +4,9 @@ import automatos.Estado;
 import automatos.Transicao;
 import automatos.afd.AFD;
 import automatos.afn.AFN;
+import automatos.ap.AutomatoPilha;
+import automatos.ap.TransicaoPilha;
+import java.util.List;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.ByteArrayOutputStream;
@@ -30,6 +33,7 @@ public class Servidor {
 
         server.createContext("/api/afd/simular", exchange -> handleSimulation(exchange, false));
         server.createContext("/api/afn/simular", exchange -> handleSimulation(exchange, true));
+        server.createContext("/api/ap/simular", Servidor::handleStackSimulation);
         server.start();
         System.out.println("Servidor iniciado em http://localhost:8080");
     }
@@ -110,6 +114,109 @@ public class Servidor {
             sendJson(exchange, 400, "{\"erro\":\"" + escapeJson(ex.getMessage()) + "\"}");
         } catch (Exception ex) {
             sendJson(exchange, 500, "{\"erro\":\"Falha interna ao simular o autômato.\"}");
+        }
+    }
+
+    private static void handleStackSimulation(HttpExchange exchange) throws IOException {
+        addCors(exchange);
+        if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
+            return;
+        }
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, "{\"erro\":\"Método não permitido.\"}");
+            return;
+        }
+
+        try {
+            Map<String, String> params = readForm(exchange);
+            String alphabetText = required(params, "alfabeto");
+            String statesText = required(params, "estados");
+            String initialStack = required(params, "pilhaInicial").trim();
+            String transitionsText = params.getOrDefault("transicoes", "");
+            String word = params.getOrDefault("palavra", "");
+
+            if (initialStack.length() != 1 || "ε".equals(initialStack)) {
+                throw new IllegalArgumentException("O símbolo inicial da pilha deve ter exatamente um caractere e não pode ser ε.");
+            }
+
+            AutomatoPilha ap = new AutomatoPilha();
+            for (String symbol : alphabetText.split(",")) {
+                String clean = symbol.trim();
+                if (clean.isEmpty()) continue;
+                if (clean.length() != 1 || "ε".equals(clean)) {
+                    throw new IllegalArgumentException("Cada símbolo do alfabeto deve ter um caractere. ε é reservado para transições vazias.");
+                }
+                ap.adicionarSimbolo(clean);
+            }
+            if (ap.getAlfabeto().isEmpty()) {
+                throw new IllegalArgumentException("Informe pelo menos um símbolo no alfabeto.");
+            }
+
+            Map<String, Estado> byName = new HashMap<>();
+            int initialCount = 0;
+            for (String entry : statesText.split(";")) {
+                if (entry.trim().isEmpty()) continue;
+                String[] parts = entry.split("\\|", -1);
+                if (parts.length != 3) throw new IllegalArgumentException("Formato inválido para um estado.");
+                String name = parts[0].trim();
+                if (name.isEmpty() || byName.containsKey(name)) {
+                    throw new IllegalArgumentException("Nome de estado vazio ou duplicado: " + name);
+                }
+                boolean isInitial = Boolean.parseBoolean(parts[1]);
+                if (isInitial) initialCount++;
+                Estado state = new Estado(name, isInitial, Boolean.parseBoolean(parts[2]));
+                byName.put(name, state);
+                ap.adicionarEstado(state);
+            }
+            if (byName.isEmpty()) throw new IllegalArgumentException("Adicione pelo menos um estado.");
+            if (initialCount != 1) throw new IllegalArgumentException("O AP deve ter exatamente um estado inicial.");
+
+            for (String entry : transitionsText.split(";")) {
+                if (entry.trim().isEmpty()) continue;
+                String[] parts = entry.split("\\|", -1);
+                if (parts.length != 5) throw new IllegalArgumentException("Cada transição do AP deve conter origem, entrada, topo, substituição e destino.");
+                Estado from = byName.get(parts[0].trim());
+                String input = parts[1].trim();
+                String top = parts[2].trim();
+                String replacement = parts[3].trim();
+                Estado to = byName.get(parts[4].trim());
+
+                if (from == null || to == null) throw new IllegalArgumentException("Uma transição referencia um estado inexistente.");
+                if (!("ε".equals(input) || input.length() == 1 && ap.getAlfabeto().contains(input))) {
+                    throw new IllegalArgumentException("A entrada da transição deve ser um símbolo do alfabeto ou ε.");
+                }
+                if (top.length() != 1 || "ε".equals(top)) {
+                    throw new IllegalArgumentException("O topo da pilha deve ser um único símbolo.");
+                }
+                if (replacement.isEmpty()) {
+                    throw new IllegalArgumentException("Use ε para não inserir símbolos na pilha.");
+                }
+                if (!"ε".equals(replacement) && replacement.contains("ε")) {
+                    throw new IllegalArgumentException("ε só pode ser usado sozinho no campo de substituição.");
+                }
+                ap.adicionarTransicaoPilha(new TransicaoPilha(from, input, top, replacement, to));
+            }
+
+            ap.setSimboloInicialPilha(initialStack);
+            boolean accepted = ap.processar(word);
+            String message = accepted
+                    ? "A palavra foi aceita pelo Autômato com Pilha."
+                    : "A palavra foi rejeitada pelo Autômato com Pilha.";
+            List<String> steps = ap.getHistorico();
+            StringBuilder json = new StringBuilder("{\"aceita\":").append(accepted)
+                    .append(",\"mensagem\":\"").append(escapeJson(message)).append("\",\"passos\":[");
+            for (int i = 0; i < steps.size(); i++) {
+                if (i > 0) json.append(',');
+                json.append('"').append(escapeJson(steps.get(i))).append('"');
+            }
+            json.append("]}");
+            sendJson(exchange, 200, json.toString());
+        } catch (IllegalArgumentException ex) {
+            sendJson(exchange, 400, "{\"erro\":\"" + escapeJson(ex.getMessage()) + "\"}");
+        } catch (Exception ex) {
+            sendJson(exchange, 500, "{\"erro\":\"Falha interna ao simular o Autômato com Pilha.\"}");
         }
     }
 

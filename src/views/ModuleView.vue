@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import AppHeader from '../components/AppHeader.vue'
 import ModuleIcon from '../components/ModuleIcon.vue'
 import AFDWorkbench from '../components/AFDWorkbench.vue'
+import APWorkbench from '../components/APWorkbench.vue'
 import { modules } from '../data/modules'
 
 const route = useRoute()
@@ -39,6 +40,8 @@ const currentModule = computed(() => modules.find((item) => item.slug === route.
         v-if="['automato-finito-deterministico', 'automato-finito-nao-deterministico'].includes(currentModule.slug)"
         :tipo="currentModule.slug === 'automato-finito-nao-deterministico' ? 'AFN' : 'AFD'"
       />
+
+      <APWorkbench v-else-if="currentModule.slug === 'automatos-com-pilha'" />
 
       <section v-else class="module-placeholder" aria-labelledby="placeholder-title">
         <div class="module-placeholder__art" aria-hidden="true">
