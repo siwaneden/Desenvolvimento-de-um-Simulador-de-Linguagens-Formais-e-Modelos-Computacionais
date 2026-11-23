@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import AppHeader from '../components/AppHeader.vue'
 import ModuleIcon from '../components/ModuleIcon.vue'
+import AFDWorkbench from '../components/AFDWorkbench.vue'
 import { modules } from '../data/modules'
 
 const route = useRoute()
@@ -34,7 +35,9 @@ const currentModule = computed(() => modules.find((item) => item.slug === route.
         </div>
       </section>
 
-      <section class="module-placeholder" aria-labelledby="placeholder-title">
+      <AFDWorkbench v-if="currentModule.slug === 'automato-finito-deterministico'" />
+
+      <section v-else class="module-placeholder" aria-labelledby="placeholder-title">
         <div class="module-placeholder__art" aria-hidden="true">
           <div class="code-line code-line--long"></div>
           <div class="code-line code-line--short"></div>
