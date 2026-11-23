@@ -4,7 +4,7 @@ import automatos.Transicao;
 
 public class TesteAFD {
 
-    public static void main(String[] args) {
+    public static void initTeste() {
 
         AFD afd = new AFD();
 

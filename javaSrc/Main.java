@@ -9,7 +9,9 @@ class Main{
 		} catch(Exception e) {
 
 		}
-		System.out.println("Deu certo");
+
+
+		TesteAP.initTeste();
 	}
 
 }

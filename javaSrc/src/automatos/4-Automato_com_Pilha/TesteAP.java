@@ -4,7 +4,7 @@ import automatos.Estado;
 
 public class TesteAP {
 
-    public static void main(String[] args) {
+    public static void initTeste() {
 
         AutomatoPilha ap = new AutomatoPilha();
 
