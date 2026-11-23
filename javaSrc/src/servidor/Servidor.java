@@ -3,145 +3,151 @@ package servidor;
 import automatos.Estado;
 import automatos.Transicao;
 import automatos.afd.AFD;
-import com.sun.net.httpserver.Headers;
+import automatos.afn.AFN;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class Servidor {
     public static void init() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
+
         server.createContext("/api/usuarios", exchange -> {
-            if (handleOptions(exchange)) return;
-            send(exchange, 200, "[{\"nome\":\"João\"}]");
+            addCors(exchange);
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(204, -1);
+                exchange.close();
+                return;
+            }
+            sendJson(exchange, 200, "[{\"nome\":\"João\"}]");
         });
-        server.createContext("/api/afd/simular", Servidor::simularAFD);
+
+        server.createContext("/api/afd/simular", exchange -> handleSimulation(exchange, false));
+        server.createContext("/api/afn/simular", exchange -> handleSimulation(exchange, true));
         server.start();
         System.out.println("Servidor iniciado em http://localhost:8080");
     }
 
-    private static void simularAFD(HttpExchange exchange) throws IOException {
-        if (handleOptions(exchange)) return;
-        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
-            send(exchange, 405, "{\"erro\":\"Use o método POST.\"}");
-            return;
-        }
-        try {
-            Map<String, String> form = parseForm(readBody(exchange.getRequestBody()));
-            AFD afd = new AFD();
-            String alphabet = form.getOrDefault("alfabeto", "");
-            for (String symbol : alphabet.split(",")) {
-                String value = symbol.trim();
-                if (!value.isEmpty()) {
-                    if (value.length() != 1) throw new IllegalArgumentException("Cada símbolo do alfabeto deve ter exatamente um caractere.");
-                    afd.adicionarSimbolo(value);
-                }
-            }
-
-            List<String> stateNames = new ArrayList<>();
-            String rawStates = form.getOrDefault("estados", "");
-            for (String row : rawStates.split(";")) {
-                if (row.trim().isEmpty()) continue;
-                String[] parts = row.split("\\|", -1);
-                if (parts.length != 3) throw new IllegalArgumentException("Formato inválido para estado.");
-                String name = parts[0].trim();
-                if (name.isEmpty() || stateNames.contains(name)) throw new IllegalArgumentException("Nome de estado vazio ou duplicado.");
-                Estado state = new Estado(name, Boolean.parseBoolean(parts[1]), Boolean.parseBoolean(parts[2]));
-                afd.adicionarEstado(state);
-                stateNames.add(name);
-            }
-            if (stateNames.isEmpty()) throw new IllegalArgumentException("Adicione pelo menos um estado.");
-            long initialCount = stateNames.stream().filter(name -> {
-                for (Estado state : afd.getEstados()) if (state.getNome().equals(name)) return state.isInicial();
-                return false;
-            }).count();
-            if (initialCount != 1) throw new IllegalArgumentException("O AFD precisa ter exatamente um estado inicial.");
-            if (afd.getEstadosFinais().isEmpty()) throw new IllegalArgumentException("Defina pelo menos um estado final.");
-
-            String rawTransitions = form.getOrDefault("transicoes", "");
-            List<String> usedPairs = new ArrayList<>();
-            for (String row : rawTransitions.split(";")) {
-                if (row.trim().isEmpty()) continue;
-                String[] parts = row.split("\\|", -1);
-                if (parts.length != 3) throw new IllegalArgumentException("Formato inválido para transição.");
-                Estado from = afd.buscarEstado(parts[0].trim());
-                Estado to = afd.buscarEstado(parts[2].trim());
-                String symbol = parts[1].trim();
-                if (symbol.length() != 1) throw new IllegalArgumentException("Cada transição deve consumir exatamente um caractere.");
-                if (from == null || to == null) throw new IllegalArgumentException("A transição referencia um estado inexistente.");
-                if (!afd.getAlfabeto().contains(symbol)) throw new IllegalArgumentException("O símbolo '" + symbol + "' não pertence ao alfabeto.");
-                String pair = from.getNome() + "\u0000" + symbol;
-                if (usedPairs.contains(pair)) throw new IllegalArgumentException("Transição duplicada: " + from.getNome() + " com símbolo " + symbol + ". Um AFD não pode ter duas saídas para o mesmo símbolo.");
-                usedPairs.add(pair);
-                afd.adicionarTransicao(new Transicao(from, symbol, to));
-            }
-            String word = form.getOrDefault("palavra", "");
-            boolean accepted = afd.processar(word);
-            String message = accepted ? "A execução terminou em um estado final." : "A execução não terminou em um estado final ou não encontrou uma transição válida.";
-            send(exchange, 200, "{\"aceita\":" + accepted + ",\"mensagem\":\"" + escapeJson(message) + "\"}");
-        } catch (IllegalArgumentException error) {
-            send(exchange, 400, "{\"erro\":\"" + escapeJson(error.getMessage()) + "\"}");
-        } catch (Exception error) {
-            send(exchange, 500, "{\"erro\":\"Erro interno ao simular o AFD.\"}");
-            error.printStackTrace();
-        }
-    }
-
-    private static boolean handleOptions(HttpExchange exchange) throws IOException {
-        addCors(exchange.getResponseHeaders());
+    private static void handleSimulation(HttpExchange exchange, boolean nondeterministic) throws IOException {
+        addCors(exchange);
         if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
             exchange.sendResponseHeaders(204, -1);
             exchange.close();
-            return true;
+            return;
         }
-        return false;
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, "{\"erro\":\"Método não permitido.\"}");
+            return;
+        }
+
+        try {
+            Map<String, String> params = readForm(exchange);
+            String alphabet = required(params, "alfabeto");
+            String statesText = required(params, "estados");
+            String transitionsText = params.getOrDefault("transicoes", "");
+            String word = params.getOrDefault("palavra", "");
+
+            AFD afd = nondeterministic ? null : new AFD();
+            AFN afn = nondeterministic ? new AFN() : null;
+            for (String symbol : alphabet.split(",")) {
+                String clean = symbol.trim();
+                if (!clean.isEmpty()) {
+                    if (nondeterministic) afn.adicionarSimbolo(clean);
+                    else afd.adicionarSimbolo(clean);
+                }
+            }
+
+            Map<String, Estado> byName = new HashMap<>();
+            for (String entry : statesText.split(";")) {
+                if (entry.trim().isEmpty()) continue;
+                String[] parts = entry.split("\\|", -1);
+                if (parts.length != 3) throw new IllegalArgumentException("Formato inválido para um estado.");
+                String name = parts[0].trim();
+                if (name.isEmpty() || byName.containsKey(name)) throw new IllegalArgumentException("Nome de estado vazio ou duplicado: " + name);
+                Estado state = new Estado(name, Boolean.parseBoolean(parts[1]), Boolean.parseBoolean(parts[2]));
+                byName.put(name, state);
+                if (nondeterministic) afn.adicionarEstado(state);
+                else afd.adicionarEstado(state);
+            }
+            if (byName.isEmpty()) throw new IllegalArgumentException("Adicione pelo menos um estado.");
+
+            for (String entry : transitionsText.split(";")) {
+                if (entry.trim().isEmpty()) continue;
+                String[] parts = entry.split("\\|", -1);
+                if (parts.length != 3) throw new IllegalArgumentException("Formato inválido para uma transição.");
+                Estado from = byName.get(parts[0].trim());
+                Estado to = byName.get(parts[2].trim());
+                String symbol = parts[1].trim();
+                if (from == null || to == null) throw new IllegalArgumentException("Uma transição referencia um estado inexistente.");
+                if (symbol.isEmpty()) throw new IllegalArgumentException("Informe o símbolo da transição.");
+                if (nondeterministic) {
+                    if (!"ε".equals(symbol) && !afn.getAlfabeto().contains(symbol)) throw new IllegalArgumentException("O símbolo '" + symbol + "' não pertence ao alfabeto.");
+                    afn.adicionarTransicao(new Transicao(from, symbol, to));
+                } else {
+                    if (!afd.getAlfabeto().contains(symbol)) throw new IllegalArgumentException("O símbolo '" + symbol + "' não pertence ao alfabeto.");
+                    for (Transicao existing : afd.getTransicoes()) {
+                        if (existing.getOrigem().equals(from) && existing.getSimbolo().equals(symbol)) {
+                            throw new IllegalArgumentException("O AFD não pode ter duas transições para o mesmo símbolo a partir de um estado.");
+                        }
+                    }
+                    afd.adicionarTransicao(new Transicao(from, symbol, to));
+                }
+            }
+
+            boolean accepted = nondeterministic ? afn.processar(word) : afd.processar(word);
+            String type = nondeterministic ? "AFN" : "AFD";
+            String message = accepted
+                ? "A palavra foi aceita pelo " + type + "."
+                : "A palavra foi rejeitada pelo " + type + ".";
+            sendJson(exchange, 200, "{\"aceita\":" + accepted + ",\"mensagem\":\"" + escapeJson(message) + "\"}");
+        } catch (IllegalArgumentException ex) {
+            sendJson(exchange, 400, "{\"erro\":\"" + escapeJson(ex.getMessage()) + "\"}");
+        } catch (Exception ex) {
+            sendJson(exchange, 500, "{\"erro\":\"Falha interna ao simular o autômato.\"}");
+        }
     }
 
-    private static String readBody(InputStream input) throws IOException {
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        byte[] buffer = new byte[1024];
-        int read;
-        while ((read = input.read(buffer)) != -1) output.write(buffer, 0, read);
-        return output.toString(StandardCharsets.UTF_8.name());
-    }
-
-    private static Map<String, String> parseForm(String body) throws Exception {
-        Map<String, String> values = new HashMap<>();
+    private static Map<String, String> readForm(HttpExchange exchange) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        exchange.getRequestBody().transferTo(buffer);
+        String body = buffer.toString(StandardCharsets.UTF_8);
+        Map<String, String> params = new HashMap<>();
         for (String pair : body.split("&")) {
-            if (pair.isEmpty()) continue;
-            String[] parts = pair.split("=", 2);
-            String key = URLDecoder.decode(parts[0], "UTF-8");
-            String value = parts.length > 1 ? URLDecoder.decode(parts[1], "UTF-8") : "";
-            values.put(key, value);
+            int separator = pair.indexOf('=');
+            String key = separator >= 0 ? pair.substring(0, separator) : pair;
+            String value = separator >= 0 ? pair.substring(separator + 1) : "";
+            params.put(URLDecoder.decode(key, StandardCharsets.UTF_8), URLDecoder.decode(value, StandardCharsets.UTF_8));
         }
-        return values;
+        return params;
     }
 
-    private static String escapeJson(String value) {
-        return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
+    private static String required(Map<String, String> params, String key) {
+        String value = params.get(key);
+        if (value == null || value.trim().isEmpty()) throw new IllegalArgumentException("Campo obrigatório ausente: " + key + ".");
+        return value;
     }
 
-    private static void send(HttpExchange exchange, int status, String body) throws IOException {
-        addCors(exchange.getResponseHeaders());
+    private static void addCors(HttpExchange exchange) {
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+    }
+
+    private static void sendJson(HttpExchange exchange, int status, String json) throws IOException {
+        byte[] response = json.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
-        byte[] response = body.getBytes(StandardCharsets.UTF_8);
         exchange.sendResponseHeaders(status, response.length);
         exchange.getResponseBody().write(response);
         exchange.close();
     }
 
-    private static void addCors(Headers headers) {
-        headers.set("Access-Control-Allow-Origin", "*");
-        headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        headers.set("Access-Control-Allow-Headers", "Content-Type");
+    private static String escapeJson(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
     }
 }

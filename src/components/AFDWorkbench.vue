@@ -1,6 +1,9 @@
 <script setup>
 import { computed, ref } from 'vue'
 
+const props = defineProps({ tipo: { type: String, default: 'AFD' } })
+const isAFN = computed(() => props.tipo === 'AFN')
+
 const alphabetText = ref('a,b')
 const states = ref([
   { id: 'q0', x: 150, y: 150, initial: true, final: false },
@@ -131,7 +134,7 @@ async function simulate() {
   params.set('transicoes', transitions.value.map((t) => `${t.from}|${t.symbol}|${t.to}`).join(';'))
   params.set('palavra', word.value)
   try {
-    const response = await fetch('http://localhost:8080/api/afd/simular', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: params })
+    const response = await fetch(`http://localhost:8080/api/${isAFN.value ? 'afn' : 'afd'}/simular`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: params })
     const data = await response.json()
     if (!response.ok) throw new Error(data.erro || 'Não foi possível simular o autômato.')
     result.value = data
@@ -141,15 +144,27 @@ async function simulate() {
 }
 function loadExample() {
   alphabetText.value = 'a,b'
-  states.value = [
-    { id: 'q0', x: 150, y: 150, initial: true, final: false },
-    { id: 'q1', x: 390, y: 150, initial: false, final: true },
-  ]
-  transitions.value = [
-    { from: 'q0', to: 'q0', symbol: 'b' }, { from: 'q0', to: 'q1', symbol: 'a' },
-    { from: 'q1', to: 'q1', symbol: 'a' }, { from: 'q1', to: 'q0', symbol: 'b' },
-  ]
-  word.value = 'aab'
+  states.value = isAFN.value
+    ? [
+        { id: 'q0', x: 130, y: 150, initial: true, final: false },
+        { id: 'q1', x: 350, y: 150, initial: false, final: false },
+        { id: 'q2', x: 570, y: 150, initial: false, final: true },
+      ]
+    : [
+        { id: 'q0', x: 150, y: 150, initial: true, final: false },
+        { id: 'q1', x: 390, y: 150, initial: false, final: true },
+      ]
+  transitions.value = isAFN.value
+    ? [
+        { from: 'q0', to: 'q1', symbol: 'ε' },
+        { from: 'q1', to: 'q1', symbol: 'a' },
+        { from: 'q1', to: 'q2', symbol: 'b' },
+      ]
+    : [
+        { from: 'q0', to: 'q0', symbol: 'b' }, { from: 'q0', to: 'q1', symbol: 'a' },
+        { from: 'q1', to: 'q1', symbol: 'a' }, { from: 'q1', to: 'q0', symbol: 'b' },
+      ]
+  word.value = isAFN.value ? 'aab' : 'aab'
   result.value = null
 }
 </script>
@@ -157,7 +172,7 @@ function loadExample() {
 <template>
   <section class="afd-workbench">
     <div class="afd-workbench__heading">
-      <div><span class="afd-kicker">EDITOR DE AUTÔMATO</span><h2>Monte seu AFD</h2><p>Crie estados, conecte transições e teste uma palavra.</p></div>
+      <div><span class="afd-kicker">EDITOR DE AUTÔMATO</span><h2>Monte seu {{ tipo }}</h2><p>Crie estados, conecte transições e teste uma palavra.</p></div>
       <button class="afd-button afd-button--quiet" @click="loadExample">Carregar exemplo</button>
     </div>
 
@@ -169,7 +184,7 @@ function loadExample() {
           <span class="afd-hint">{{ connectMode ? 'Clique no estado de origem e depois no destino.' : 'Arraste os estados para organizar o diagrama.' }}</span>
         </div>
         <div class="afd-canvas-wrap">
-          <svg class="afd-canvas" viewBox="0 0 800 450" role="img" aria-label="Diagrama do autômato finito determinístico" @pointermove="moveDrag" @pointerup="stopDrag" @pointercancel="stopDrag">
+          <svg class="afd-canvas" viewBox="0 0 800 450" role="img" :aria-label="`Diagrama do ${tipo}`" @pointermove="moveDrag" @pointerup="stopDrag" @pointercancel="stopDrag">
             <defs><marker id="afd-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#8b7bea" /></marker></defs>
             <g v-for="(item, index) in transitions" :key="`${item.from}-${item.symbol}-${item.to}-${index}`">
               <path :d="edgePath(item)" class="afd-edge" marker-end="url(#afd-arrow)" />
@@ -198,7 +213,7 @@ function loadExample() {
         </section>
         <section class="afd-config-section"><div class="afd-subheading">Nova transição</div>
           <label class="afd-field"><span>Origem</span><select v-model="selectedFrom"><option v-for="state in states" :key="state.id" :value="state.id">{{ state.id }}</option></select></label>
-          <label class="afd-field"><span>Símbolo</span><input id="afd-symbol" v-model="transitionSymbol" placeholder="a" @keyup.enter="addTransition" /></label>
+          <label class="afd-field"><span>Símbolo</span><input id="afd-symbol" v-model="transitionSymbol" :placeholder="isAFN ? 'a ou ε' : 'a'" @keyup.enter="addTransition" /></label>
           <label class="afd-field"><span>Destino</span><select v-model="selectedTo"><option v-for="state in states" :key="state.id" :value="state.id">{{ state.id }}</option></select></label>
           <button class="afd-button afd-button--primary afd-full" :disabled="!states.length" @click="addTransition">Adicionar transição</button>
           <div class="afd-transition-list"><div v-for="(item, index) in transitions" :key="index" class="afd-transition-row"><code>{{ item.from }} —{{ item.symbol }}→ {{ item.to }}</code><button @click="transitions.splice(index, 1)">×</button></div><p v-if="!transitions.length" class="afd-muted">Nenhuma transição cadastrada.</p></div>
@@ -209,7 +224,7 @@ function loadExample() {
         </section>
       </aside>
     </div>
-    <p class="afd-footnote">A simulação é processada pelo backend Java. No AFD, cada estado deve ter no máximo uma transição para cada símbolo do alfabeto.</p>
+    <p class="afd-footnote">A simulação é processada pelo backend Java. No {{ tipo }}, {{ isAFN ? 'um símbolo pode levar a vários estados e ε representa uma transição vazia.' : 'cada estado deve ter no máximo uma transição para cada símbolo do alfabeto.' }}</p>
   </section>
 </template>
 

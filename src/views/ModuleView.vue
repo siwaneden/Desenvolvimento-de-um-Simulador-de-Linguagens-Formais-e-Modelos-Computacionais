@@ -35,7 +35,10 @@ const currentModule = computed(() => modules.find((item) => item.slug === route.
         </div>
       </section>
 
-      <AFDWorkbench v-if="currentModule.slug === 'automato-finito-deterministico'" />
+      <AFDWorkbench
+        v-if="['automato-finito-deterministico', 'automato-finito-nao-deterministico'].includes(currentModule.slug)"
+        :tipo="currentModule.slug === 'automato-finito-nao-deterministico' ? 'AFN' : 'AFD'"
+      />
 
       <section v-else class="module-placeholder" aria-labelledby="placeholder-title">
         <div class="module-placeholder__art" aria-hidden="true">

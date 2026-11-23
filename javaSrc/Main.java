@@ -7,11 +7,9 @@ class Main{
 		try{
 			Servidor.init();
 		} catch(Exception e) {
-			e.printStackTrace();
+
 		}
 
-
-		TesteAP.initTeste();
 	}
 
 }
