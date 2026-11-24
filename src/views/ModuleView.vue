@@ -5,6 +5,9 @@ import AppHeader from '../components/AppHeader.vue'
 import ModuleIcon from '../components/ModuleIcon.vue'
 import AFDWorkbench from '../components/AFDWorkbench.vue'
 import APWorkbench from '../components/APWorkbench.vue'
+import LinguagensWorkbench from '../components/LinguagensWorkbench.vue'
+import TuringWorkbench from '../components/TuringWorkbench.vue'
+import ComplexidadeWorkbench from '../components/ComplexidadeWorkbench.vue'
 import { modules } from '../data/modules'
 
 const route = useRoute()
@@ -42,6 +45,12 @@ const currentModule = computed(() => modules.find((item) => item.slug === route.
       />
 
       <APWorkbench v-else-if="currentModule.slug === 'automatos-com-pilha'" />
+
+      <LinguagensWorkbench v-else-if="currentModule.slug === 'linguagens-formais'" />
+
+      <TuringWorkbench v-else-if="currentModule.slug === 'maquinas-de-turing'" />
+
+      <ComplexidadeWorkbench v-else-if="currentModule.slug === 'complexidade-computacional'" />
 
       <section v-else class="module-placeholder" aria-labelledby="placeholder-title">
         <div class="module-placeholder__art" aria-hidden="true">
